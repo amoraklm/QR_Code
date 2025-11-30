@@ -2,80 +2,51 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackContext
+from flask import Flask
 
-# تنظیمات logging
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+# Flask app برای health check
+web_app = Flask(__name__)
 
-class RailwayBot:
+@web_app.route('/health')
+def health_check():
+    return "OK", 200
+
+@web_app.route('/')
+def home():
+    return "🤖 Telegram Bot is Running on Fly.io!", 200
+
+class TelegramBot:
     def __init__(self):
         self.token = os.environ.get('BOT_TOKEN')
         if not self.token:
-            raise ValueError("لطفا BOT_TOKEN را در محیط تنظیم کنید")
+            raise ValueError("BOT_TOKEN not set")
         
         self.application = Application.builder().token(self.token).build()
         self.setup_handlers()
     
     def setup_handlers(self):
         self.application.add_handler(CommandHandler("start", self.start))
-        self.application.add_handler(CommandHandler("help", self.help))
         self.application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.echo))
     
     async def start(self, update: Update, context: CallbackContext):
-        user = update.effective_user
-        await update.message.reply_text(
-            f"👋 سلام {user.first_name}!\n"
-            "🤖 ربات روی Railway فعال شد!\n\n"
-            "🎵 امکانات:\n"
-            "• دانلود موزیک\n"
-            "• دانلود ویدیو\n"
-            "• مدیریت گروه\n\n"
-            "از /help کمک بگیرید."
-        )
-    
-    async def help(self, update: Update, context: CallbackContext):
-        help_text = """
-📖 راهنمای ربات:
-
-🔐 امنیت:
-/security - مدیریت امنیت گروه
-
-🎵 موزیک:
-لینک یوتیوب ارسال کنید
-
-🎬 ویدیو:
-لینک یوتیوب ارسال کنید
-
-ربات توسط Railway میزبانی میشود 🚄
-        """
-        await update.message.reply_text(help_text)
+        await update.message.reply_text('🚀 ربات روی Fly.io فعال است!')
     
     async def echo(self, update: Update, context: CallbackContext):
-        text = update.message.text
-        if "youtube.com" in text or "youtu.be" in text:
-            await update.message.reply_text("🎬 لینک یوتیوب دریافت شد! به زودی قابلیت دانلود اضافه میشه.")
-        else:
-            await update.message.reply_text(f"پیام شما: {text}")
-
+        await update.message.reply_text(f'پیام شما: {update.message.text}')
+    
     def run(self):
-        # استفاده از webhook برای Railway
-        PORT = int(os.environ.get('PORT', 8443))
-        WEBHOOK_URL = os.environ.get('RAILWAY_STATIC_URL')
-        
-        if WEBHOOK_URL:
-            # حالت Production - Webhook
-            self.application.run_webhook(
-                listen="0.0.0.0",
-                port=PORT,
-                url_path=self.token,
-                webhook_url=f"{WEBHOOK_URL}/{self.token}"
-            )
-        else:
-            # حالت Development - Polling
-            self.application.run_polling()
+        # استفاده از polling برای سادگی
+        self.application.run_polling()
 
 if __name__ == '__main__':
-    bot = RailwayBot()
+    # اجرای Flask در thread جداگانه
+    import threading
+    flask_thread = threading.Thread(
+        target=lambda: web_app.run(host='0.0.0.0', port=8080, debug=False, use_reloader=False),
+        daemon=True
+    )
+    flask_thread.start()
+    
+    # اجرای ربات تلگرام
+    bot = TelegramBot()
     bot.run()
